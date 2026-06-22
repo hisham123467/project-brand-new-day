@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Signal — AI Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0F1419;
+    --surface: #161F2C;
+    --surface-2: #1E2A3A;
+    --line: #2A3848;
+    --text: #E8EDF2;
+    --text-muted: #8B98A8;
+    --cyan: #5EEAD4;
+    --cyan-dim: rgba(94,234,212,0.14);
+    --amber: #F59E0B;
+    --amber-dim: rgba(245,158,11,0.14);
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+  }
+  ::selection{ background:var(--cyan-dim); }
+
+  /* Header */
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:18px 24px;
+    border-bottom:1px solid var(--line);
+    flex-shrink:0;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .brand-mark{
+    width:28px;height:28px;
+    position:relative;
+  }
+  .brand-name{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:18px;
+    letter-spacing:0.01em;
+  }
+  .status-pill{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--text-muted);
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:100px;
+  }
+  .status-dot{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--cyan);
+    box-shadow:0 0 8px var(--cyan);
+  }
+
+  /* Main layout */
+  main{
+    flex:1;
+    display:flex;
+    overflow:hidden;
+  }
+
+  /* Sidebar visualizer */
+  .stage{
+    width:260px;
+    flex-shrink:0;
+    border-right:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    position:relative;
+    background:
+      radial-gradient(circle at 50% 40%, rgba(94,234,212,0.06), transparent 60%);
+  }
+  .orb-wrap{
+    width:140px;height:140px;
+    display:flex;align-items:center;justify-content:center;
+    position:relative;
+  }
+  .orb-ring{
+    position:absolute;
+    border-radius:50%;
+    border:1px solid var(--cyan);
+    opacity:0;
+  }
+  .orb-core{
+    width:64px;height:64px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #8FF5E4, var(--cyan) 60%, #2BB8A4 100%);
+    box-shadow:0 0 30px rgba(94,234,212,0.35);
+    transition:box-shadow 0.3s ease, transform 0.3s ease;
+  }
+  body.listening .orb-core{
+    background:radial-gradient(circle at 35% 30%, #FFD9A0, var(--amber) 60%, #C2730A 100%);
+    box-shadow:0 0 40px rgba(245,158,11,0.45);
+  }
+  body.listening .orb-ring{ animation: ripple 1.6s ease-out infinite; border-color:var(--amber);}
+  body.speaking .orb-ring{ animation: ripple 1.6s ease-out infinite; }
+  @keyframes ripple{
+    0%{ width:64px;height:64px; opacity:0.55; }
+    100%{ width:160px;height:160px; opacity:0; }
+  }
+  body.thinking .orb-core{ animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse{
+    0%,100%{ transform:scale(1); }
+    50%{ transform:scale(0.88); }
+  }
+  .stage-label{
+    margin-top:22px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    color:var(--text-muted);
+    letter-spacing:0.04em;
+    text-align:center;
+    min-height:16px;
+  }
+
+  .controls{
+    margin-top:32px;
+    display:flex;
+    gap:12px;
+  }
+  .ctl-btn{
+    width:48px;height:48px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--text-muted);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+    transition:all 0.15s ease;
+  }
+  .ctl-btn:hover{ border-color:var(--cyan); color:var(--cyan); }
+  .ctl-btn.active{
+    background:var(--amber-dim);
+    border-color:var(--amber);
+    color:var(--amber);
+  }
+  .ctl-btn svg{ width:20px;height:20px; }
+
+  .camera-preview{
+    margin-top:18px;
+    width:100%;
+    max-width:200px;
+    border-radius:10px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    display:none;
+    aspect-ratio:4/3;
+    background:#000;
+  }
+  .camera-preview.on{ display:block; }
+  .camera-preview video{ width:100%;height:100%;object-fit:cover; display:block; }
+
+  /* Chat column */
+  .chat-col{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+  }
+  .messages{
+    flex:1;
+    overflow-y:auto;
+    padding:28px 32px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .messages::-webkit-scrollbar{ width:8px; }
+  .messages::-webkit-scrollbar-thumb{ background:var(--line); border-radius:8px; }
+
+  .msg{
+    max-width:640px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .msg.user{ align-self:flex-end; align-items:flex-end; }
+  .msg.agent{ align-self:flex-start; align-items:flex-start; }
+  .msg-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--text-muted);
+  }
+  .msg-bubble{
+    padding:13px 16px;
+    border-radius:var(--radius);
+    line-height:1.5;
+    font-size:14.5px;
+    white-space:pre-wrap;
+  }
+  .msg.user .msg-bubble{
+    background:var(--cyan-dim);
+    border:1px solid rgba(94,234,212,0.3);
+    border-bottom-right-radius:4px;
+  }
+  .msg.agent .msg-bubble{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-bottom-left-radius:4px;
+  }
+  .msg-image{
+    max-width:220px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    margin-top:4px;
+  }
+
+  .empty-state{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    color:var(--text-muted);
+    text-align:center;
+    gap:8px;
+    padding:0 40px;
+  }
+  .empty-state h2{
+    font-family:'Space Grotesk',sans-serif;
+    color:var(--text);
+    font-size:20px;
+    font-weight:600;
+    margin:0;
+  }
+  .empty-state p{ margin:0; font-size:13.5px; max-width:360px; }
+
+  /* Input bar */
+  .input-bar{
+    border-top:1px solid var(--line);
+    padding:16px 24px;
+    flex-shrink:0;
+  }
+  .input-row{
+    display:flex;
+    align-items:flex-end;
+    gap:10px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:8px 8px 8px 16px;
+    transition:border-color 0.15s ease;
+  }
+  .input-row:focus-within{ border-color:var(--cyan); }
+  textarea{
+    flex:1;
+    background:transparent;
+    border:none;
+    outline:none;
+    resize:none;
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:14.5px;
+    line-height:1.5;
+    max-height:140px;
+    padding:8px 0;
+  }
+  textarea::placeholder{ color:var(--text-muted); }
+  .send-btn{
+    width:38px;height:38px;
+    border-radius:10px;
+    border:none;
+    background:var(--cyan);
+    color:#0F1419;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+    transition:opacity 0.15s ease, transform 0.1s ease;
+  }
+  .send-btn:hover{ transform:scale(1.05); }
+  .send-btn:disabled{ opacity:0.35; cursor:default; transform:none; }
+  .send-btn svg{ width:17px;height:17px; }
+  .input-hint{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-muted);
+    margin-top:8px;
+    padding-left:4px;
+  }
+
+  @media (max-width:760px){
+    .stage{ width:120px; padding:16px 10px; }
+    .orb-wrap{ width:80px;height:80px; }
+    .orb-core{ width:40px;height:40px; }
+    .stage-label{ display:none; }
+    .controls{ flex-direction:column; margin-top:16px; }
+    .camera-preview{ display:none !important; }
+    .messages{ padding:18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 28 28" fill="none">
+      <circle cx="14" cy="14" r="3.5" fill="#5EEAD4"/>
+      <circle cx="14" cy="14" r="8" stroke="#5EEAD4" stroke-opacity="0.5" stroke-width="1.2"/>
+      <circle cx="14" cy="14" r="13" stroke="#5EEAD4" stroke-opacity="0.2" stroke-width="1.2"/>
+    </svg>
+    <span class="brand-name">Signal</span>
+  </div>
+  <div class="status-pill">
+    <span class="status-dot"></span>
+    <span id="statusText">connected</span>
+  </div>
+</header>
+
+<main>
+  <div class="stage">
+    <div class="orb-wrap">
+      <div class="orb-ring"></div>
+      <div class="orb-core" id="orbCore"></div>
+    </div>
+    <div class="stage-label" id="stageLabel">idle</div>
+
+    <div class="controls">
+      <button class="ctl-btn" id="micBtn" title="Voice input">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+        </svg>
+      </button>
+      <button class="ctl-btn" id="camBtn" title="Camera">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 7l-7 5 7 5V7z"></path>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+        </svg>
+      </button>
+      <button class="ctl-btn" id="muteBtn" title="Mute voice replies">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+      </button>
+    </div>
+
+    <div class="camera-preview" id="cameraPreview">
+      <video id="video" autoplay playsinline muted></video>
+    </div>
+    <canvas id="canvas" style="display:none;"></canvas>
+  </div>
+
+  <div class="chat-col">
+    <div class="messages" id="messages">
+      <div class="empty-state" id="emptyState">
+        <h2>Talk, type, or show me something</h2>
+        <p>Tap the mic to speak, the camera icon to share what you see, or just start typing below.</p>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="input-row">
+        <textarea id="textInput" placeholder="Message Signal…" rows="1"></textarea>
+        <button class="send-btn" id="sendBtn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5"></line>
+            <polyline points="6 11 12 5 18 11"></polyline>
+          </svg>
+        </button>
+      </div>
+      <div class="input-hint" id="inputHint">Enter to send · Shift+Enter for new line</div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const messagesEl = document.getElementById('messages');
+  const emptyState = document.getElementById('emptyState');
+  const textInput = document.getElementById('textInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const micBtn = document.getElementById('micBtn');
+  const camBtn = document.getElementById('camBtn');
+  const muteBtn = document.getElementById('muteBtn');
+  const cameraPreview = document.getElementById('cameraPreview');
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const stageLabel = document.getElementById('stageLabel');
+  const statusText = document.getElementById('statusText');
+
+  let history = [];
+  let cameraOn = false;
+  let cameraStream = null;
+  let muted = false;
+  let pendingImage = null;
+
+  // ---------- Chat plumbing ----------
+  function setStage(state){
+    document.body.classList.remove('listening','thinking','speaking');
+    if(state) document.body.classList.add(state);
+    stageLabel.textContent = state || 'idle';
+  }
+
+  function addMessage(role, text, imageDataUrl){
+    emptyState.style.display = 'none';
+    const wrap = document.createElement('div');
+    wrap.className = 'msg ' + role;
+    const label = document.createElement('div');
+    label.className = 'msg-label';
+    label.textContent = role === 'user' ? 'you' : 'signal';
+    wrap.appendChild(label);
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
+    if(imageDataUrl){
+      const img = document.createElement('img');
+      img.className = 'msg-image';
+      img.src = imageDataUrl;
+      wrap.appendChild(img);
+    }
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return bubble;
+  }
+
+  async function sendToAgent(userText, imageDataUrl){
+    setStage('thinking');
+    statusText.textContent = 'thinking…';
+
+    const userContent = [];
+    if(imageDataUrl){
+      userContent.push({
+        type:'image',
+        source:{ type:'base64', media_type:'image/jpeg', data: imageDataUrl.split(',')[1] }
+      });
+    }
+    userContent.push({ type:'text', text: userText });
+
+    history.push({ role:'user', content: userContent });
+
+    try{
+      const res = await fetch('/api/chat', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ messages: history })
+      });
+      const data = await res.json();
+      if(data.error){ throw new Error(data.error); }
+      // content can include tool_use/tool_result blocks when the agent
+      // browses the web — we only read out the text blocks here.
+      const replyText = (data.content || [])
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('\n') || "I didn't get a response back — try again?";
+
+      history.push({ role:'assistant', content: replyText });
+      addMessage('agent', replyText);
+      speak(replyText);
+    }catch(err){
+      addMessage('agent', "Something went wrong reaching the model: " + err.message);
+      setStage(null);
+    }
+    statusText.textContent = 'connected';
+  }
+
+  function handleSend(){
+    const text = textInput.value.trim();
+    if(!text) return;
+    addMessage('user', text, pendingImage);
+    sendToAgent(text, pendingImage);
+    textInput.value = '';
+    autosize();
+    updateSendState();
+    pendingImage = null;
+  }
+
+  function updateSendState(){
+    sendBtn.disabled = textInput.value.trim().length === 0;
+  }
+  function autosize(){
+    textInput.style.height = 'auto';
+    textInput.style.height = Math.min(textInput.scrollHeight, 140) + 'px';
+  }
+  textInput.addEventListener('input', () => { updateSendState(); autosize(); });
+  textInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      if(!sendBtn.disabled) handleSend();
+    }
+  });
+  sendBtn.addEventListener('click', handleSend);
+
+  // ---------- Voice input (speech-to-text) ----------
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizer = null;
+  let isListening = false;
+
+  if(SpeechRecognition){
+    recognizer = new SpeechRecognition();
+    recognizer.continuous = false;
+    recognizer.interimResults = false;
+    recognizer.lang = 'en-US';
+
+    recognizer.onstart = () => {
+      isListening = true;
+      document.body.classList.add('listening');
+      micBtn.classList.add('active');
+      stageLabel.textContent = 'listening…';
+    };
+    recognizer.onend = () => {
+      isListening = false;
+      document.body.classList.remove('listening');
+      micBtn.classList.remove('active');
+      if(!document.body.classList.contains('thinking') && !document.body.classList.contains('speaking')){
+        stageLabel.textContent = 'idle';
+      }
+    };
+    recognizer.onerror = (e) => {
+      stageLabel.textContent = 'mic error: ' + e.error;
+    };
+    recognizer.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      addMessage('user', transcript, pendingImage);
+      sendToAgent(transcript, pendingImage);
+      pendingImage = null;
+    };
+  }else{
+    micBtn.title = 'Voice input not supported in this browser';
+    micBtn.style.opacity = 0.4;
+    micBtn.style.cursor = 'not-allowed';
+  }
+
+  micBtn.addEventListener('click', () => {
+    if(!recognizer) return;
+    if(isListening){ recognizer.stop(); }
+    else{ recognizer.start(); }
+  });
+
+  // ---------- Voice output (text-to-speech) ----------
+  function speak(text){
+    if(muted) return;
+    if(!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.02;
+    utter.onstart = () => setStage('speaking');
+    utter.onend = () => setStage(null);
+    window.speechSynthesis.speak(utter);
+  }
+
+  muteBtn.addEventListener('click', () => {
+    muted = !muted;
+    muteBtn.classList.toggle('active', muted);
+    if(muted) window.speechSynthesis.cancel();
+  });
+
+  // ---------- Camera ----------
+  camBtn.addEventListener('click', async () => {
+    if(cameraOn){
+      if(cameraStream){
+        cameraStream.getTracks().forEach(t => t.stop());
+      }
+      cameraOn = false;
+      camBtn.classList.remove('active');
+      cameraPreview.classList.remove('on');
+      pendingImage = null;
+      return;
+    }
+    try{
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user' } });
+      video.srcObject = cameraStream;
+      cameraOn = true;
+      camBtn.classList.add('active');
+      cameraPreview.classList.add('on');
+    }catch(err){
+      stageLabel.textContent = 'camera denied';
+    }
+  });
+
+  function captureFrame(){
+    if(!cameraOn) return null;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  }
+
+  // capture a frame automatically right before each send, if camera is on
+  const originalHandleSend = handleSend;
+  function wrappedSend(){
+    if(cameraOn) pendingImage = captureFrame();
+    originalHandleSend();
+  }
+  sendBtn.removeEventListener('click', handleSend);
+  sendBtn.addEventListener('click', wrappedSend);
+
+  textInput.removeEventListener('keydown', () => {});
+  textInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      if(!sendBtn.disabled) wrappedSend();
+    }
+  });
+
+  if(recognizer){
+    recognizer.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      if(cameraOn) pendingImage = captureFrame();
+      addMessage('user', transcript, pendingImage);
+      sendToAgent(transcript, pendingImage);
+      pendingImage = null;
+    };
+  }
+</script>
+</body>
+</html>

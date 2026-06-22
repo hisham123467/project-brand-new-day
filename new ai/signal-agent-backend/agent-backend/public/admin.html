@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Signal — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0F1419; --surface:#161F2C; --line:#2A3848;
+    --text:#E8EDF2; --text-muted:#8B98A8;
+    --cyan:#5EEAD4; --cyan-dim:rgba(94,234,212,0.14);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Inter',sans-serif; min-height:100vh;
+    padding:40px 24px;
+  }
+  .wrap{ max-width:680px; margin:0 auto; }
+  h1{
+    font-family:'Space Grotesk',sans-serif; font-size:24px; margin:0 0 4px;
+  }
+  .sub{ color:var(--text-muted); font-size:14px; margin:0 0 32px; }
+  .card{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:14px; padding:24px; margin-bottom:20px;
+  }
+  .card h2{
+    font-family:'Space Grotesk',sans-serif; font-size:15px; margin:0 0 4px;
+  }
+  .card .desc{ color:var(--text-muted); font-size:13px; margin:0 0 18px; }
+  .row{ display:flex; align-items:center; gap:12px; }
+  .avatar{ width:40px;height:40px;border-radius:50%; background:var(--line); }
+  .who{ flex:1; }
+  .who .name{ font-weight:600; font-size:14px; }
+  .who .email{ color:var(--text-muted); font-size:12.5px; font-family:'JetBrains Mono',monospace; }
+  .btn{
+    padding:9px 16px; border-radius:8px; border:1px solid var(--line);
+    background:transparent; color:var(--text); font-size:13px;
+    cursor:pointer; font-family:'Inter',sans-serif;
+  }
+  .btn.primary{ background:var(--cyan); color:#0F1419; border:none; font-weight:600; }
+  .btn.danger{ border-color:#4a2a2a; color:#e08a8a; }
+  .badge{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px;
+    padding:4px 9px; border-radius:100px; background:var(--cyan-dim);
+    color:var(--cyan); display:inline-block;
+  }
+  .badge.off{ background:rgba(255,255,255,0.05); color:var(--text-muted); }
+  .msg-list{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px; }
+  .msg-item{
+    border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-size:13px;
+  }
+  .msg-item .subject{ font-weight:600; margin-bottom:2px; }
+  .msg-item .meta{ color:var(--text-muted); font-size:11.5px; font-family:'JetBrains Mono',monospace; margin-bottom:6px; }
+  .msg-item .snippet{ color:var(--text-muted); }
+  .empty{ color:var(--text-muted); font-size:13px; text-align:center; padding:20px 0; }
+  .scope-note{
+    font-size:12px; color:var(--text-muted); margin-top:14px; padding-top:14px;
+    border-top:1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Account dashboard</h1>
+  <p class="sub">Manage your own connected accounts and what Signal can access.</p>
+
+  <div class="card">
+    <h2>Gmail</h2>
+    <p class="desc">Connect your own Gmail so Signal can read your inbox when you ask it to. Only you can see this — it uses your personal Google sign-in.</p>
+    <div id="gmailStatus"></div>
+    <div class="scope-note">Scope requested: read-only inbox access. Signal can never send, delete, or modify your email.</div>
+  </div>
+
+  <div class="card" id="inboxCard" style="display:none;">
+    <h2>Recent messages</h2>
+    <p class="desc">The 10 most recent messages in your own inbox.</p>
+    <ul class="msg-list" id="msgList"></ul>
+  </div>
+</div>
+
+<script>
+  const gmailStatus = document.getElementById('gmailStatus');
+  const inboxCard = document.getElementById('inboxCard');
+  const msgList = document.getElementById('msgList');
+
+  async function loadStatus(){
+    const res = await fetch('/auth/me');
+    const data = await res.json();
+
+    if(data.connected){
+      gmailStatus.innerHTML = `
+        <div class="row">
+          <img class="avatar" src="${data.user.picture || ''}" onerror="this.style.display='none'">
+          <div class="who">
+            <div class="name">${data.user.name || 'Connected'}</div>
+            <div class="email">${data.user.email}</div>
+          </div>
+          <span class="badge">connected</span>
+          <button class="btn danger" id="disconnectBtn">Disconnect</button>
+        </div>
+      `;
+      document.getElementById('disconnectBtn').onclick = async () => {
+        await fetch('/auth/logout', { method:'POST' });
+        location.reload();
+      };
+      loadInbox();
+    }else{
+      gmailStatus.innerHTML = `
+        <div class="row">
+          <div class="who">
+            <span class="badge off">not connected</span>
+          </div>
+          <a class="btn primary" href="/auth/google">Connect Gmail</a>
+        </div>
+      `;
+    }
+  }
+
+  async function loadInbox(){
+    inboxCard.style.display = 'block';
+    msgList.innerHTML = '<li class="empty">Loading…</li>';
+    try{
+      const res = await fetch('/api/gmail/messages');
+      const data = await res.json();
+      if(!data.messages || data.messages.length === 0){
+        msgList.innerHTML = '<li class="empty">No messages found.</li>';
+        return;
+      }
+      msgList.innerHTML = data.messages.map(m => `
+        <li class="msg-item">
+          <div class="subject">${escapeHtml(m.subject || '(no subject)')}</div>
+          <div class="meta">${escapeHtml(m.from)} · ${escapeHtml(m.date)}</div>
+          <div class="snippet">${escapeHtml(m.snippet || '')}</div>
+        </li>
+      `).join('');
+    }catch(err){
+      msgList.innerHTML = '<li class="empty">Could not load messages.</li>';
+    }
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  loadStatus();
+</script>
+</body>
+</html>
